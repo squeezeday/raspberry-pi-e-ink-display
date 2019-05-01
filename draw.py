@@ -43,7 +43,7 @@ def create_image():
   req.add_header('Authorization', 'Bearer ' + home_assistant_access_token)
   content = urlopen(req).read()
 
-  sensor_data = json.loads(content)
+  sensor_data = json.loads(content.decode("utf-8"))
 
   baseImage = Image.new('1', (display_width, display_height), 255)
 
