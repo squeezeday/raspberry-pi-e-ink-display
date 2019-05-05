@@ -1,5 +1,8 @@
 from draw import create_image
+from PIL import ImageChops, ImageOps
 
-image = create_image()
+black_image, red_image = create_image()
 
-image.show()
+combined_image = ImageChops.logical_and(black_image, red_image)
+
+combined_image.show()

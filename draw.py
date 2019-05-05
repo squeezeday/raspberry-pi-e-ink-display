@@ -45,46 +45,75 @@ def create_image():
 
   sensor_data = json.loads(content.decode("utf-8"))
 
-  baseImage = Image.new('1', (display_width, display_height), 255)
+  black_image = Image.new('1', (display_width, display_height), 255)
+  red_image = Image.new('1', (display_width, display_height), 255) 
 
-  draw = ImageDraw.Draw(baseImage)
+  draw_black = ImageDraw.Draw(black_image)
+  draw_red = ImageDraw.Draw(red_image)
 
-  # Clock
+  # Date & calendar
 
-  clockFontLarge = ImageFont.truetype('SourceSansPro-Bold.ttf', 110)
+  dateFontLarge = ImageFont.truetype('SourceSansPro-Bold.ttf', 60)
+  dateFontSmall = ImageFont.truetype('SourceSansPro-Bold.ttf', 34)
 
   now = datetime.datetime.now()
 
-  draw.text((200, 100), now.strftime('%H:%M'), font = clockFontLarge, fill = 0)
+  msg = now.strftime('%A - %-d.%-m.')
+
+  text_w, text_h = draw_black.textsize(msg, font = dateFontLarge)
+
+  draw_black.text(((display_width-text_w)/2, 10), msg, font = dateFontLarge, fill = 0)
+
+  req = Request(home_assistant_base_url + 'states/' + os.getenv('CALENDAR'))
+  req.add_header('Authorization', 'Bearer ' + home_assistant_access_token)
+  content = urlopen(req).read()
+
+  calendar_data = json.loads(content.decode("utf-8"))
+
+  date = datetime.datetime.strptime(calendar_data['attributes']['start_time'], '%Y-%m-%d %H:%M:%S')
+
+  msg = date.strftime("%-d.%-m.") + " " + calendar_data['attributes']['message']
+
+  text_w, text_h = draw_black.textsize(msg, font = dateFontSmall)
+
+  draw_black.text(((display_width-text_w)/2, 100), msg, font = dateFontSmall, fill = 0)
 
   # Weather stuff
 
-  draw.rectangle([(0, 240), (display_width, 242)], fill = 0)
+  draw_black.rectangle([(0, 190), (display_width, 192)], fill = 0)
 
   iconFontLarge = ImageFont.truetype('materialdesignicons-webfont.ttf', 48)
   iconFontSmall = ImageFont.truetype('materialdesignicons-webfont.ttf', 32)
 
-  weatherFontLarge = ImageFont.truetype('SourceSansPro-Bold.ttf', 36)
+  weatherFontLarge = ImageFont.truetype('SourceSansPro-Bold.ttf', 40)
   weatherFontMedium = ImageFont.truetype('SourceSansPro-Bold.ttf', 24)
   weatherFontSmall = ImageFont.truetype('SourceSansPro-Regular.ttf', 16)
 
-  draw.text((250, 255), unquote(weather_icons[sensor_data['state']]), font = iconFontLarge, fill = 0)
+  line_w, line_h = draw_black.textsize(unquote(weather_icons[sensor_data['state']]), font = iconFontLarge)
 
-  draw.text((310, 252), str(sensor_data['attributes']['temperature']) + ' °C', font = weatherFontLarge, fill = 0)
+  text_w, text_h = draw_black.textsize(str(sensor_data['attributes']['temperature']) + ' °C', font = weatherFontLarge)
 
-  draw.rectangle([(0, 313), (display_width, 314)], fill = 0)
+  offset_x = (display_width - (line_w + text_w) + 10) / 2
+
+  draw_red.text((offset_x, 215), unquote(weather_icons[sensor_data['state']]), font = iconFontLarge, fill = 0)
+
+  draw_black.text((offset_x + 60, 212), str(sensor_data['attributes']['temperature']) + ' °C', font = weatherFontLarge, fill = 0)
+
+  draw_black.rectangle([(0, 283), (display_width, 284)], fill = 0)
+
+  offset_x = round(display_width / 3)
 
   for i in range(3):
 
     date = datetime.datetime.strptime(sensor_data['attributes']['forecast'][i]['datetime'], '%Y-%m-%dT%H:%M:%S')
 
-    draw.text(((213*i)+10, 320), date.strftime("%A %-d.%-m."), font = weatherFontSmall, fill = 0)
+    draw_black.text(((offset_x*i)+10, 305), date.strftime("%A %-d.%-m."), font = weatherFontSmall, fill = 0)
 
-    draw.text(((213*i)+10, 343), unquote(weather_icons[sensor_data['attributes']['forecast'][i]['condition']]), font = iconFontSmall, fill = 0)
+    draw_red.text(((offset_x*i)+10, 328), unquote(weather_icons[sensor_data['attributes']['forecast'][i]['condition']]), font = iconFontSmall, fill = 0)
 
-    draw.text(((213*i)+50, 341), str(sensor_data['attributes']['forecast'][i]['temperature']) + ' °C' , font = weatherFontMedium, fill = 0)
+    draw_black.text(((offset_x*i)+50, 326), str(sensor_data['attributes']['forecast'][i]['temperature']) + ' °C' , font = weatherFontMedium, fill = 0)
 
     if i < 2:
-      draw.rectangle([((213*i)+ 210, 320), ((213*i)+ 211, 380)], fill = 0)
+      draw_black.rectangle([((offset_x*i)+ offset_x - 3, 290), ((offset_x*i)+ offset_x - 2, 380)], fill = 0)
 
-  return baseImage
+  return black_image, red_image
