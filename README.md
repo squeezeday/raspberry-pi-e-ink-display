@@ -7,6 +7,7 @@ Displays data from Home Assistant API, uses the Waveshare E-ink displays.
 - Raspberry Pi (should work on even Zero model, requires GPIO pins though)
 - Waveshare E-ink Display (currently hardcoded to use [the 7.5 inch 3-color, model](https://www.waveshare.com/7.5inch-e-paper-hat-b.htm), can be modified to use other models)
 - Python 3
+- Home Assistant (running on your network, you need the Dark Sky sensor and Calendar component)
 
 ## Installation
 
