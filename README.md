@@ -2,6 +2,8 @@
 
 Displays data from Home Assistant API, uses the Waveshare E-ink displays.
 
+![Example Display](example-display.png)
+
 ## Requirements
 
 - Raspberry Pi (should work on even Zero model, requires GPIO pins though)
