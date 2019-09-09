@@ -2,6 +2,9 @@
 
 Displays calendar events from your caldav compatible calendar such as Nextcloud, data from Home Assistant API, uses the Waveshare E-ink displays.
 
+Forked from https://gitlab.com/risse/raspberry-pi-e-ink-display/
+
+
 ![Example Display](example-display.png)
 
 ## Requirements
