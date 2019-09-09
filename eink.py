@@ -1,15 +1,18 @@
 from draw import create_image
 from PIL import Image
-import epd7in5b
+from waveshare_epd import epd7in5
 
-black_image, red_image = create_image()
+black_image = create_image()
 
-epd = epd7in5b.EPD()
+epd = epd7in5.EPD()
+print("Init epd7in5..")
 epd.init()
 
-# print("Clearing...")
-# epd.Clear(0xFF)
+print("Clearing...")
+epd.Clear()
 
-epd.display(epd.getbuffer(black_image), epd.getbuffer(red_image))
+print("Display image")
+epd.display(epd.getbuffer(black_image))
 
 epd.sleep()
+print("Done")

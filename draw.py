@@ -2,9 +2,11 @@ from PIL import Image, ImageDraw, ImageFont
 from urllib.request import Request, urlopen
 from urllib.parse import quote, unquote
 import json
-import datetime
+import pytz
 import os
-
+from calendarhelper import getCaldavEvents, calendarEvent
+from datetime import datetime, date, timedelta, tzinfo, timezone
+from tzlocal import get_localzone
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -13,10 +15,14 @@ locale.setlocale(locale.LC_ALL, os.getenv('LOCALE'))
 
 home_assistant_base_url = os.getenv('HOME_ASSISTANT_BASE_URL')
 home_assistant_access_token = os.getenv('HOME_ASSISTANT_ACCESS_TOKEN')
+caldav_url = os.getenv('CALDAV_URL')
 
-display_width = int(os.getenv('DISPLAY_WIDTH'))
-display_height = int(os.getenv('DISPLAY_HEIGHT'))
+display_height = int(os.getenv('DISPLAY_WIDTH'))
+display_width = int(os.getenv('DISPLAY_HEIGHT'))
 
+localtimezone = get_localzone()
+
+# cheat sheet https://cdn.materialdesignicons.com/4.3.95/
 weather_icons = {
   'cloudy': '%EF%96%90',
   'fog': '%EF%96%91',
@@ -34,86 +40,127 @@ weather_icons = {
   'sunset': '%EF%96%9A',
   'sunset-down': '%EF%96%9B',
   'sunset-up': '%EF%96%9C',
-  'windy': '%EF%96%9D'
+  'windy': '%EF%96%9D',
+  'thermometer': '\uF50F',
+  'humidity': '\uF58E',
+  'sunset': '\uF59B',
+  'sunrise': '\uF59C'
 }
+
+def get_ha_sensor_state(state):
+  try:
+    req = Request(home_assistant_base_url + state)
+    req.add_header('Authorization', 'Bearer ' + home_assistant_access_token)
+    content = urlopen(req).read()
+    sensor_data = json.loads(content.decode("utf-8"))
+    return sensor_data
+  except Exception as e:
+    print("Error reading " + state + ": " + str(e))
+    return None
 
 def create_image():
 
-  req = Request(home_assistant_base_url + 'states/weather.dark_sky')
-  req.add_header('Authorization', 'Bearer ' + home_assistant_access_token)
-  content = urlopen(req).read()
-
-  sensor_data = json.loads(content.decode("utf-8"))
-
+  # init black/white image
   black_image = Image.new('1', (display_width, display_height), 255)
-  red_image = Image.new('1', (display_width, display_height), 255) 
-
   draw_black = ImageDraw.Draw(black_image)
-  draw_red = ImageDraw.Draw(red_image)
 
-  # Date & calendar
+  # init fonts
+  fontForecastToday = ImageFont.truetype('materialdesignicons-webfont.ttf', 48)
+  fontForecast = ImageFont.truetype('materialdesignicons-webfont.ttf', 32)
+  fontThermometer = ImageFont.truetype('SourceSansPro-Bold.ttf', 36)
+  fontSun = ImageFont.truetype('SourceSansPro-Bold.ttf', 24)
+  fontEventToday = ImageFont.truetype('SourceSansPro-Regular.ttf', 26)
+  fontEvent = ImageFont.truetype('SourceSansPro-Regular.ttf', 24)
+  fontDateToday = ImageFont.truetype('SourceSansPro-Bold.ttf', 40)
+  fontDate = ImageFont.truetype('SourceSansPro-Bold.ttf', 26)
 
-  dateFontLarge = ImageFont.truetype('SourceSansPro-Bold.ttf', 60)
-  dateFontSmall = ImageFont.truetype('SourceSansPro-Bold.ttf', 34)
+  now = datetime.now().astimezone(localtimezone)
 
-  now = datetime.datetime.now()
+  # get weather forecast
+  weather_data = get_ha_sensor_state('states/weather.smhi_home') # or states/weather.dark_sky
 
-  msg = now.strftime('%A - %-d.%-m.')
+  # get sunrise/sunset
+  sun_data = get_ha_sensor_state('states/sun.sun')['attributes']
 
-  text_w, text_h = draw_black.textsize(msg, font = dateFontLarge)
+  # get sensor data
+  outdoor_sensor = get_ha_sensor_state('states/sensor.outdoor_2')
 
-  draw_black.text(((display_width-text_w)/2, 10), msg, font = dateFontLarge, fill = 0)
+  # get calendar events
+  events = getCaldavEvents(caldav_url)
 
-  req = Request(home_assistant_base_url + 'states/' + os.getenv('CALENDAR'))
-  req.add_header('Authorization', 'Bearer ' + home_assistant_access_token)
-  content = urlopen(req).read()
 
-  calendar_data = json.loads(content.decode("utf-8"))
+  # draw today
+  msg = now.strftime('%A %-d/%-m')
+  text_w, text_h = draw_black.textsize(msg, font = fontDateToday)
+  draw_black.text((10, 10), msg, font = fontDateToday, fill = 0)
 
-  date = datetime.datetime.strptime(calendar_data['attributes']['start_time'], '%Y-%m-%d %H:%M:%S')
+  # draw today's forecast
+  if weather_data is not None:
+    draw_black.text((245, 10), unquote(weather_icons[weather_data['attributes']['forecast'][0]['condition']]), font = fontForecastToday, fill = 0)
+    draw_black.text((295, 10), str(weather_data['attributes']['forecast'][0]['temperature']) + ' °C' , font = fontThermometer, fill = 0)
 
-  msg = date.strftime("%-d.%-m.") + " " + calendar_data['attributes']['message']
+  # draw current outdoor temp
+  if outdoor_sensor is not None:
+    str_current_outdoor_temp = str(outdoor_sensor["state"] + ' ' + outdoor_sensor['attributes']['unit_of_measurement'])
+    text_w, text_h = draw_black.textsize(str_current_outdoor_temp, font = fontThermometer)
+    current_outdoor_temp_y = display_height - 10 - text_h
+    draw_black.text((35, current_outdoor_temp_y), str_current_outdoor_temp, font = fontThermometer, fill = 0)
+    draw_black.text((0, current_outdoor_temp_y+10), unquote(weather_icons[outdoor_sensor['attributes']['icon'][4:]]), font = fontForecast, fill = 0)
 
-  text_w, text_h = draw_black.textsize(msg, font = dateFontSmall)
+  # draw sunrise/sunset hours
+  if sun_data is not None:
+    sunrise = pytz.utc.localize(datetime.strptime(sun_data['next_rising'][:-6], '%Y-%m-%dT%H:%M:%S'))
+    sunset = pytz.utc.localize(datetime.strptime(sun_data['next_setting'][:-6], '%Y-%m-%dT%H:%M:%S'))
 
-  draw_black.text(((display_width-text_w)/2, 100), msg, font = dateFontSmall, fill = 0)
+    draw_black.text((200, current_outdoor_temp_y+10), sunrise.astimezone(localtimezone).strftime("%H:%M",), font = fontSun, fill = 0)
+    draw_black.text((170, current_outdoor_temp_y+10), unquote(weather_icons['sunrise']), font = fontForecast, fill = 0)
+    draw_black.text((300, current_outdoor_temp_y+10), sunset.astimezone(localtimezone).strftime("%H:%M",), font = fontSun, fill = 0)
+    draw_black.text((270, current_outdoor_temp_y+10), unquote(weather_icons['sunset']), font = fontForecast, fill = 0)
 
-  # Weather stuff
+  max_y = display_height - 80
+  y = 30
+  date = now
+  j = 0
 
-  draw_black.rectangle([(0, 190), (display_width, 192)], fill = 0)
+  for i in range(7):
 
-  iconFontLarge = ImageFont.truetype('materialdesignicons-webfont.ttf', 48)
-  iconFontSmall = ImageFont.truetype('materialdesignicons-webfont.ttf', 32)
+    if y > max_y:
+      break
 
-  weatherFontLarge = ImageFont.truetype('SourceSansPro-Bold.ttf', 40)
-  weatherFontMedium = ImageFont.truetype('SourceSansPro-Bold.ttf', 24)
-  weatherFontSmall = ImageFont.truetype('SourceSansPro-Regular.ttf', 16)
+    # draw day and forecast
+    if i != 0:
+      draw_black.text((10, y), date.strftime("%A %-d/%-m"), font = fontDate, fill = 0)
+      if weather_data is not None:
+        draw_black.text((280, y), unquote(weather_icons[weather_data['attributes']['forecast'][i]['condition']]), font = fontForecast, fill = 0)
+        draw_black.text((320, y), str(weather_data['attributes']['forecast'][i]['temperature']) + ' °C' , font = fontSun, fill = 0)
+    
+    y+=30
 
-  line_w, line_h = draw_black.textsize(unquote(weather_icons[sensor_data['state']]), font = iconFontLarge)
+    # draw events for the day
+    if events is not None:
+      for ev in events[j:]:
+        eventStart = ev.datetimestart.astimezone(localtimezone)
+        eventEnd = ev.datetimeend.astimezone(localtimezone)
+        if y > max_y:
+          break
+        if not ev.date == date.date() and not eventStart <= date < eventEnd:
+          continue
+        if not ev.allday:
+          row = "{} {}".format(eventStart.strftime("%H:%M",), ev.summary)
+        else:
+          row = ev.summary
+        if i == 0:
+          font = fontEventToday
+        else:
+          font = fontEvent
+        draw_black.text((10,y), row, font = font, fill = 0)
+        y += 24
+        if eventStart > date:
+          j += 1
+          break
 
-  text_w, text_h = draw_black.textsize(str(sensor_data['attributes']['temperature']) + ' °C', font = weatherFontLarge)
+    # increment
+    y += 12
+    date = date + timedelta(days=1)
 
-  offset_x = (display_width - (line_w + text_w) + 10) / 2
-
-  draw_red.text((offset_x, 215), unquote(weather_icons[sensor_data['state']]), font = iconFontLarge, fill = 0)
-
-  draw_black.text((offset_x + 60, 212), str(sensor_data['attributes']['temperature']) + ' °C', font = weatherFontLarge, fill = 0)
-
-  draw_black.rectangle([(0, 283), (display_width, 284)], fill = 0)
-
-  offset_x = round(display_width / 3)
-
-  for i in range(3):
-
-    date = datetime.datetime.strptime(sensor_data['attributes']['forecast'][i]['datetime'], '%Y-%m-%dT%H:%M:%S')
-
-    draw_black.text(((offset_x*i)+10, 305), date.strftime("%A %-d.%-m."), font = weatherFontSmall, fill = 0)
-
-    draw_red.text(((offset_x*i)+10, 328), unquote(weather_icons[sensor_data['attributes']['forecast'][i]['condition']]), font = iconFontSmall, fill = 0)
-
-    draw_black.text(((offset_x*i)+50, 326), str(sensor_data['attributes']['forecast'][i]['temperature']) + ' °C' , font = weatherFontMedium, fill = 0)
-
-    if i < 2:
-      draw_black.rectangle([((offset_x*i)+ offset_x - 3, 290), ((offset_x*i)+ offset_x - 2, 380)], fill = 0)
-
-  return black_image, red_image
+  return black_image
