@@ -106,3 +106,6 @@ venv.bak/
 # saved models
 *.h5
 *.bin
+
+waveshare_epd
+e-Paper
