@@ -120,7 +120,7 @@ def create_image():
   max_y = display_height - 80
   y = 30
   date = now
-  j = 0
+  dateutc = datetime(now.year, now.month, now.day, 0,0,0,0, timezone.utc) # FIXME: make timezone naive
 
   for i in range(7):
 
@@ -138,15 +138,15 @@ def create_image():
 
     # draw events for the day
     if events is not None:
-      for ev in events[j:]:
-        eventStart = ev.datetimestart.astimezone(localtimezone)
-        eventEnd = ev.datetimeend.astimezone(localtimezone)
+      for ev in events:
+        eventStart = ev.datetimestart
+        eventEnd = ev.datetimeend
         if y > max_y:
           break
-        if not ev.date == date.date() and not eventStart <= date < eventEnd:
+        if not ev.date == date.date() and not eventStart <= dateutc < eventEnd:
           continue
         if not ev.allday:
-          row = "{} {}".format(eventStart.strftime("%H:%M",), ev.summary)
+          row = "{} {}".format(eventStart.astimezone(localtimezone).strftime("%H:%M",), ev.summary)
         else:
           row = ev.summary
         if i == 0:
@@ -155,12 +155,10 @@ def create_image():
           font = fontEvent
         draw_black.text((10,y), row, font = font, fill = 0)
         y += 24
-        if eventStart > date:
-          j += 1
-          break
 
     # increment
     y += 12
     date = date + timedelta(days=1)
+    dateutc = dateutc + timedelta(days=1)
 
   return black_image
