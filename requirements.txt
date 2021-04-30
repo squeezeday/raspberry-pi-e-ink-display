@@ -3,6 +3,6 @@ python-dotenv==0.10.1
 RPi.GPIO==0.6.5
 spidev==3.4
 pytz==2019.2
-urllib3==1.25.3
+urllib3==1.25.8
 caldav==0.6.1
 tzlocal==2.0.0
